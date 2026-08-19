@@ -161,7 +161,7 @@ function seedEquity() {
   let v = baseCapital;
   for (let i = 0; i < 42; i++) {
     if (i > 0) v += gaussian() * baseCapital * 0.004;
-    pts.push(v);
+    pts.push({ assets: v, pnl: v - baseCapital, profitDelta: null, opName: null, time: null });
   }
   equityHistory = pts;
 }
@@ -193,32 +193,72 @@ function renderCockpit(changed = {}) {
   $("#cockpitMetrics").innerHTML = html;
 }
 
-function drawSpark(series) {
+function drawSpark(points) {
   const svg = $("#sparkChart");
-  const w = 800, h = 64;
-  const min = Math.min(...series) * 0.999;
-  const max = Math.max(...series) * 1.001;
+  const w = 800, h = 100;
+  const vals = points.map((p) => p.assets);
+  const min = Math.min(...vals) * 0.999;
+  const max = Math.max(...vals) * 1.001;
   const range = (max - min) || 1;
-  const x = (i) => (i / (series.length - 1)) * w;
-  const y = (v) => h - 3 - ((v - min) / range) * (h - 6);
+  const x = (i) => (vals.length <= 1 ? 0 : (i / (vals.length - 1)) * w);
+  const y = (v) => h - 4 - ((v - min) / range) * (h - 8);
 
-  const line = series.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
+  const line = vals.map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join(" ");
   const area = line + ` L${w},${h} L0,${h} Z`;
 
-  const change = series.length > 1 ? series[series.length - 1] - series[series.length - 2] : 0;
+  const change = vals.length > 1 ? vals[vals.length - 1] - vals[vals.length - 2] : 0;
   const color = change >= 0 ? "#3fb950" : "#f85149";
+
+  const nodes = points.map((p, i) => {
+    const cx = x(i).toFixed(1), cy = y(p.assets).toFixed(1);
+    const isOp = !!p.opName;
+    const isLast = i === points.length - 1;
+    const r = isLast ? 4.6 : 3.2;
+    const fill = isOp ? "#2f81f7" : color;
+    return `
+      <circle class="node" data-i="${i}" cx="${cx}" cy="${cy}" r="12" fill="transparent" style="cursor:pointer"/>
+      <circle cx="${cx}" cy="${cy}" r="${r}" fill="${fill}" stroke="#0b0f14" stroke-width="1.4" pointer-events="none"/>`;
+  }).join("");
 
   svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
   svg.setAttribute("preserveAspectRatio", "none");
   svg.innerHTML = `
     <defs>
       <linearGradient id="sparkGrad" x1="0" y1="0" x2="0" y2="1">
-        <stop offset="0%" stop-color="${color}" stop-opacity="0.25"/>
+        <stop offset="0%" stop-color="${color}" stop-opacity="0.22"/>
         <stop offset="100%" stop-color="${color}" stop-opacity="0"/>
       </linearGradient>
     </defs>
     <path d="${area}" fill="url(#sparkGrad)"/>
-    <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>`;
+    <path d="${line}" fill="none" stroke="${color}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+    ${nodes}`;
+}
+
+function tipRow(k, v, dir) {
+  return `<div class="tip-row"><span class="tk">${k}</span><span class="tv ${dir}">${v}</span></div>`;
+}
+
+function showTip(point, circleEl) {
+  const tip = $("#chartTip");
+  if (!point) { tip.classList.add("hidden"); return; }
+  const rows = [];
+  rows.push(`<div class="tip-title">${point.opName || "历史净值"}</div>`);
+  if (point.time) rows.push(`<div class="tip-time">${point.time}</div>`);
+  rows.push(tipRow("总资产", "¥" + fmt(point.assets, 0), point.pnl >= 0 ? "up" : "down"));
+  rows.push(tipRow("累计浮盈", (point.pnl >= 0 ? "+" : "") + fmt(point.pnl, 0), point.pnl >= 0 ? "up" : "down"));
+  if (point.profitDelta != null) {
+    rows.push(tipRow("单笔盈亏", (point.profitDelta >= 0 ? "+" : "") + fmt(point.profitDelta, 0), point.profitDelta >= 0 ? "up" : "down"));
+  }
+  tip.innerHTML = rows.join("");
+  tip.classList.remove("hidden");
+
+  const box = document.querySelector(".chart-box");
+  const boxRect = box.getBoundingClientRect();
+  const cRect = circleEl.getBoundingClientRect();
+  const cx = cRect.left + cRect.width / 2 - boxRect.left;
+  const cy = cRect.top - boxRect.top;
+  tip.style.left = clamp(cx, 90, boxRect.width - 90) + "px";
+  tip.style.top = (cy - 8) + "px";
 }
 
 /* =========================================================
@@ -296,7 +336,13 @@ function executeOp(op) {
   opCount += 1;
   if (profit > 0) winCount += 1;
   runningMaxDd = Math.max(runningMaxDd, res.drawdown);
-  equityHistory.push(baseCapital + cumProfit);
+  equityHistory.push({
+    assets: baseCapital + cumProfit,
+    pnl: cumProfit,
+    profitDelta: profit,
+    opName: op.name,
+    time: new Date().toLocaleTimeString("zh-CN", { hour12: false }),
+  });
   drawSpark(equityHistory);
 
   addLog(op, res, evalRes);
@@ -391,6 +437,16 @@ function init() {
   $("#clearLog").addEventListener("click", () => {
     logs.length = 0;
     renderLogs();
+  });
+
+  // 净值曲线节点点击 → 显示详细数据
+  document.addEventListener("click", (e) => {
+    const node = e.target.closest("circle.node[data-i]");
+    if (node) {
+      showTip(equityHistory[+node.dataset.i], node);
+    } else if (!e.target.closest("#chartTip")) {
+      $("#chartTip").classList.add("hidden");
+    }
   });
 }
 
