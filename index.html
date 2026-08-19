@@ -3,146 +3,70 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>QuantSim · 量化交易模拟后台</title>
+  <title>QuantSim · 量化交易驾驶舱</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <header class="topbar">
-    <div class="brand">
-      <span class="logo">QS</span>
-      <div class="brand-text">
-        <h1>量化交易模拟后台</h1>
-        <span class="subtitle">Quant Trading Operations Simulator</span>
+
+  <!-- 顶部固定驾驶舱 -->
+  <header class="cockpit">
+    <div class="cockpit-top">
+      <div class="brand">
+        <span class="status-dot"></span>
+        <div class="brand-text">
+          <div class="title">QuantSim 驾驶舱</div>
+          <div class="subtitle">模拟量化交易运营 · 仅演示</div>
+        </div>
+      </div>
+      <div class="cockpit-metrics" id="cockpitMetrics"></div>
+      <div class="cockpit-actions">
+        <button type="button" class="btn ghost small" id="resetBtn">重置</button>
       </div>
     </div>
-    <div class="topbar-right">
-      <span class="sys-status"><i class="dot"></i>系统运行中</span>
-      <button id="refreshBtn" class="btn ghost">刷新行情</button>
+    <div class="cockpit-chart">
+      <span class="chart-label">资产净值走势</span>
+      <svg id="sparkChart"></svg>
     </div>
   </header>
 
-  <main class="container">
-    <!-- 监控总览 -->
-    <section class="overview" id="overviewCards">
-      <!-- 由 JS 渲染 -->
-    </section>
-
-    <!-- 平台监控 + 净值曲线 -->
-    <section class="grid-two">
-      <div class="panel">
-        <div class="panel-head">
-          <h2>平台 / 账户监控</h2>
-          <span class="pill" id="accountCount">0 个账户</span>
-        </div>
-        <div class="account-list" id="accountList"></div>
-      </div>
-
-      <div class="panel">
-        <div class="panel-head">
-          <h2>净值曲线</h2>
-          <span class="pill">模拟</span>
-        </div>
-        <div class="chart-wrap">
-          <svg id="equityChart" viewBox="0 0 600 260" preserveAspectRatio="none"></svg>
-        </div>
-        <div class="chart-legend">
-          <span><i class="swatch b"></i>组合净值</span>
-          <span><i class="swatch w"></i>基准</span>
-        </div>
-      </div>
-    </section>
-
-    <!-- 策略操作台 -->
-    <section class="panel operate">
+  <main>
+    <!-- 操作按钮区 -->
+    <section class="panel">
       <div class="panel-head">
-        <h2>策略操作台</h2>
-        <div class="mode-switch" role="tablist">
-          <button type="button" class="mode-tab active" data-mode="classic">经典操作台</button>
-          <button type="button" class="mode-tab" data-mode="preset">预设操作台</button>
-        </div>
+        <h2>操作台</h2>
+        <span class="hint" id="opHint">点击任意操作按钮，上方驾驶舱数据会立即更新并高亮变化</span>
+        <button type="button" class="btn ghost small" id="refreshMarket">换一批行情</button>
       </div>
+      <div class="market-strip" id="marketSignals"></div>
+      <div class="op-grid" id="opGrid"></div>
+    </section>
 
-      <!-- 经典操作台：一键式 -->
-      <div id="classicMode">
-        <form id="opForm" class="op-form" autocomplete="off">
-          <div class="field">
-            <label for="platform">交易平台</label>
-            <select id="platform"></select>
-          </div>
-          <div class="field">
-            <label for="category">交易品类</label>
-            <select id="category"></select>
-          </div>
-          <div class="field">
-            <label for="strategy">策略方式</label>
-            <select id="strategy"></select>
-          </div>
-          <div class="field">
-            <label for="risk">风险 / 杠杆</label>
-            <select id="risk"></select>
-          </div>
-          <div class="field">
-            <label for="horizon">持仓周期</label>
-            <select id="horizon"></select>
-          </div>
-          <div class="field">
-            <label for="capital">投入资金 <span id="capitalUnit">(USDT)</span></label>
-            <input id="capital" type="number" min="0" step="100" value="10000" />
-          </div>
-          <div class="field submit-field">
-            <button type="submit" class="btn primary" id="runBtn">执行模拟</button>
-          </div>
-        </form>
-      </div>
-
-      <!-- 预设操作台：预案库，勾选后单笔/批量执行 -->
-      <div id="presetMode" class="hidden">
-        <div class="market-bar">
-          <div class="market-signals" id="marketSignals"></div>
-          <button type="button" class="btn ghost small" id="refreshMarket">换一批行情</button>
-        </div>
-        <div class="preset-list" id="presetList"></div>
-        <div class="preset-actions">
-          <span class="step-hint" id="selHint">已选 0 项</span>
-          <button type="button" class="btn primary" id="batchRun">批量执行选中</button>
-        </div>
-      </div>
-
-      <!-- 结果区 -->
+    <!-- 结果横幅 -->
+    <section class="panel result-panel">
       <div id="resultBox" class="result hidden"></div>
     </section>
 
-    <!-- 交易记录 -->
+    <!-- 操作记录 -->
     <section class="panel">
       <div class="panel-head">
-        <h2>交易 / 决策记录</h2>
-        <button id="clearLog" class="btn ghost small">清空</button>
+        <h2>操作记录</h2>
+        <button type="button" class="btn ghost small" id="clearLog">清空</button>
       </div>
       <div class="table-wrap">
         <table class="log-table">
           <thead>
             <tr>
-              <th>时间</th>
-              <th>平台</th>
-              <th>品类</th>
-              <th>策略</th>
-              <th>风险</th>
-              <th>投入</th>
-              <th>收益率</th>
-              <th>盈亏</th>
-              <th>一句话评价</th>
+              <th>时间</th><th>操作</th><th>平台 / 品类</th><th>策略</th><th>风控</th><th>投入</th><th>收益率</th><th>盈亏</th><th>一句话评价</th>
             </tr>
           </thead>
           <tbody id="logBody"></tbody>
         </table>
+        <div id="logEmpty" class="empty">暂无记录，请点击上方任一操作按钮。</div>
       </div>
-      <p class="empty" id="logEmpty">暂无记录，请在操作台执行一次模拟。</p>
     </section>
   </main>
 
-  <footer class="footer">
-    QuantSim 模拟后台 · 数据均为模拟，不构成任何投资建议
-  </footer>
+  <footer class="footer">QuantSim 模拟后台 · 数据均为模拟，不构成任何投资建议。</footer>
 
   <script src="app.js"></script>
 </body>
