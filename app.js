@@ -406,6 +406,38 @@ function renderBatchResult(results) {
 }
 
 /* =========================================================
+ * 交易记录
+ * ========================================================= */
+
+function addLog(op, res, evalRes) {
+  const now = new Date();
+  const time = now.toLocaleTimeString("zh-CN", { hour12: false });
+  logs.unshift({ time, op, res, evalRes });
+  renderLogs();
+}
+
+function renderLogs() {
+  const body = $("#logBody");
+  body.innerHTML = "";
+  logs.forEach((l) => {
+    const tr = document.createElement("tr");
+    const rr = l.res.returnRate;
+    tr.innerHTML = `
+      <td>${l.time}</td>
+      <td>${l.op.platform.name}</td>
+      <td>${l.op.category}</td>
+      <td>${l.op.strategy.name}</td>
+      <td>${l.op.risk.name}</td>
+      <td>${fmt(l.op.capital, 0)}</td>
+      <td class="${rr >= 0 ? "up" : "down"}">${sign(rr)}</td>
+      <td class="${l.res.profit >= 0 ? "up" : "down"}">${l.res.profit >= 0 ? "+" : ""}${fmt(l.res.profit, 0)}</td>
+      <td><span class="eval-chip chip-${l.evalRes.band}">${l.evalRes.tag}</span></td>`;
+    body.appendChild(tr);
+  });
+  $("#logEmpty").classList.toggle("hidden", logs.length > 0);
+}
+
+/* =========================================================
  * 执行一次模拟
  * ========================================================= */
 
