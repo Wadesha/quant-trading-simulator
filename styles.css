@@ -245,3 +245,42 @@ body {
   text-align: center; color: var(--muted); font-size: 12px;
   padding: 24px; border-top: 1px solid var(--border);
 }
+
+/* 操作台模式切换 */
+.mode-switch {
+  display: inline-flex; gap: 6px; background: var(--panel-2);
+  border: 1px solid var(--border); border-radius: 10px; padding: 4px;
+}
+.mode-tab {
+  border: none; background: transparent; color: var(--muted);
+  font-size: 13px; font-weight: 600; padding: 6px 14px; border-radius: 7px; cursor: pointer;
+}
+.mode-tab.active { background: var(--accent); color: #fff; }
+.mode-tab:not(.active):hover { color: var(--text); }
+
+/* 分步引导操作台 */
+.steps { display: flex; gap: 8px; margin-bottom: 18px; }
+.step {
+  flex: 1; display: flex; align-items: center; gap: 10px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 12px 14px; color: var(--muted);
+}
+.step .step-num {
+  width: 26px; height: 26px; border-radius: 50%; flex: none;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--border); color: var(--muted); font-weight: 700; font-size: 13px;
+}
+.step.active { border-color: var(--accent); color: var(--text); }
+.step.active .step-num { background: var(--accent); color: #fff; }
+
+.step-title { font-size: 14px; color: var(--text); font-weight: 700; margin-bottom: 14px; }
+
+.step-panel { display: none; }
+.step-panel.active { display: block; animation: flash .35s ease; }
+
+.wizard-nav {
+  display: flex; align-items: center; justify-content: space-between; gap: 14px;
+  margin-top: 20px; border-top: 1px solid var(--border); padding-top: 16px;
+}
+.step-hint { color: var(--muted); font-size: 13px; }
+.btn:disabled { opacity: .4; cursor: not-allowed; }

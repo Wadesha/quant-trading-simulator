@@ -147,6 +147,12 @@ function evaluate(rate, strategy) {
 let accounts = [];
 let equitySeries = [];
 const logs = [];
+let activeMode = "classic";   // classic | guided
+let currentStep = 0;          // 分步引导：0/1/2
+
+// 两套表单元素的作用域（经典 / 分步）
+const classicScope = { platform: "#platform", category: "#category", strategy: "#strategy", risk: "#risk", horizon: "#horizon", capital: "#capital", unit: "#capitalUnit" };
+const guidedScope = { platform: "#gPlatform", category: "#gCategory", strategy: "#gStrategy", risk: "#gRisk", horizon: "#gHorizon", capital: "#gCapital", unit: "#gCapitalUnit" };
 
 /* =========================================================
  * 渲染：下拉框
@@ -162,29 +168,39 @@ function fillSelect(sel, items, textFn, valueFn) {
   });
 }
 
-function fillPlatforms() {
-  fillSelect($("#platform"), PLATFORMS, (p) => `${p.name} · ${p.region}`, (p) => p.id);
-  fillSelect($("#strategy"), STRATEGIES, (s) => `${s.name}（${s.note}）`, (s) => s.id);
-  fillSelect($("#risk"), RISKS, (r) => `${r.name}（${r.leverage}x）`, (r) => r.id);
-  fillSelect($("#horizon"), HORIZONS, (h) => h.name, (h) => h.id);
-  syncCategories();
-}
-
-function currentPlatform() {
-  return PLATFORMS.find((p) => p.id === $("#platform").value);
-}
-
-function syncCategories() {
-  const p = currentPlatform();
+function syncCategoriesFor(scope) {
+  const p = PLATFORMS.find((p) => p.id === $(scope.platform).value);
   const cats = p.categories.map((c) => CATEGORIES[c]);
-  fillSelect($("#category"), cats, (c) => c.label, (c) => c.label);
-  updateUnit();
+  fillSelect($(scope.category), cats, (c) => c.label, (c) => c.label);
+  updateUnitFor(scope);
 }
 
-function updateUnit() {
-  const catId = $("#category").value;
-  const unit = Object.values(CATEGORIES).find((c) => c.label === catId)?.unit || "USDT";
-  $("#capitalUnit").textContent = `(${unit})`;
+function updateUnitFor(scope) {
+  const catId = $(scope.category).value;
+  const cat = Object.values(CATEGORIES).find((c) => c.label === catId);
+  $(scope.unit).textContent = `(${cat ? cat.unit : "USDT"})`;
+}
+
+function populateSelects() {
+  [classicScope, guidedScope].forEach((scope) => {
+    fillSelect($(scope.platform), PLATFORMS, (p) => `${p.name} · ${p.region}`, (p) => p.id);
+    fillSelect($(scope.strategy), STRATEGIES, (s) => `${s.name}（${s.note}）`, (s) => s.id);
+    fillSelect($(scope.risk), RISKS, (r) => `${r.name}（${r.leverage}x）`, (r) => r.id);
+    fillSelect($(scope.horizon), HORIZONS, (h) => h.name, (h) => h.id);
+    syncCategoriesFor(scope);
+  });
+}
+
+function readInputs() {
+  const scope = activeMode === "guided" ? guidedScope : classicScope;
+  return {
+    platform: PLATFORMS.find((p) => p.id === $(scope.platform).value),
+    category: $(scope.category).value,
+    strategy: STRATEGIES.find((s) => s.id === $(scope.strategy).value),
+    risk: RISKS.find((r) => r.id === $(scope.risk).value),
+    horizon: HORIZONS.find((h) => h.id === $(scope.horizon).value),
+    capital: Math.max(0, Number($(scope.capital).value) || 0),
+  };
 }
 
 /* =========================================================
@@ -370,23 +386,15 @@ function renderLogs() {
 }
 
 /* =========================================================
- * 事件绑定
+ * 执行一次模拟
  * ========================================================= */
 
-function handleSubmit(e) {
-  e.preventDefault();
-  const platform = currentPlatform();
-  const category = $("#category").value;
-  const strategy = STRATEGIES.find((s) => s.id === $("#strategy").value);
-  const risk = RISKS.find((r) => r.id === $("#risk").value);
-  const horizon = HORIZONS.find((h) => h.id === $("#horizon").value);
-  const capital = Math.max(0, Number($("#capital").value) || 0);
+function runOperation() {
+  const op = readInputs();
+  const res = simulate(op.platform, op.category, op.strategy, op.risk, op.horizon, op.capital);
+  const evalRes = evaluate(res.rate, op.strategy);
 
-  const res = simulate(platform, category, strategy, risk, horizon, capital);
-  const evalRes = evaluate(res.rate, strategy);
-  const op = { platform, category, strategy, risk, horizon, capital };
-
-  renderResult(res, evalRes, capital);
+  renderResult(res, evalRes, op.capital);
   addLog(op, res, evalRes);
 
   // 净值曲线向前推进一次
@@ -396,16 +404,74 @@ function handleSubmit(e) {
   }
 }
 
+/* =========================================================
+ * 模式切换 / 分步引导
+ * ========================================================= */
+
+function setMode(mode) {
+  activeMode = mode;
+  document.querySelectorAll(".mode-tab").forEach((b) =>
+    b.classList.toggle("active", b.dataset.mode === mode));
+  $("#classicMode").classList.toggle("hidden", mode !== "classic");
+  $("#guidedMode").classList.toggle("hidden", mode !== "guided");
+  if (mode === "guided") renderSteps();
+}
+
+function renderSteps() {
+  document.querySelectorAll(".step").forEach((el) =>
+    el.classList.toggle("active", Number(el.dataset.step) === currentStep));
+  document.querySelectorAll(".step-panel").forEach((el) =>
+    el.classList.toggle("active", Number(el.dataset.panel) === currentStep));
+
+  const atLast = currentStep === 2;
+  $("#prevBtn").disabled = currentStep === 0;
+  $("#nextBtn").textContent = atLast ? "执行模拟" : "下一步";
+  $("#stepHint").textContent = `第 ${currentStep + 1} / 3 步`;
+}
+
+function goNext() {
+  if (currentStep === 2) {
+    runOperation();
+    return;
+  }
+  currentStep = Math.min(2, currentStep + 1);
+  renderSteps();
+}
+
+function goPrev() {
+  currentStep = Math.max(0, currentStep - 1);
+  renderSteps();
+}
+
+/* =========================================================
+ * 事件绑定
+ * ========================================================= */
+
+function handleSubmit(e) {
+  e.preventDefault();
+  runOperation();
+}
+
 function init() {
-  fillPlatforms();
+  populateSelects();
   renderAccounts();
   equitySeries = generateEquity();
   drawChart(equitySeries);
   renderLogs();
+  renderSteps();
 
   $("#opForm").addEventListener("submit", handleSubmit);
-  $("#platform").addEventListener("change", syncCategories);
-  $("#category").addEventListener("change", updateUnit);
+
+  document.querySelectorAll(".mode-tab").forEach((b) =>
+    b.addEventListener("click", () => setMode(b.dataset.mode)));
+
+  $("#platform").addEventListener("change", () => syncCategoriesFor(classicScope));
+  $("#category").addEventListener("change", () => updateUnitFor(classicScope));
+  $("#gPlatform").addEventListener("change", () => syncCategoriesFor(guidedScope));
+  $("#gCategory").addEventListener("change", () => updateUnitFor(guidedScope));
+  $("#prevBtn").addEventListener("click", goPrev);
+  $("#nextBtn").addEventListener("click", goNext);
+
   $("#refreshBtn").addEventListener("click", () => {
     renderAccounts();
     equitySeries = generateEquity();
