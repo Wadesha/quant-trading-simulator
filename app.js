@@ -49,6 +49,36 @@ const HORIZONS = [
   { id: "long",     name: "中长期", turnover: 1.5 },
 ];
 
+/* ---------- 预设操作（专业预案库） ---------- */
+
+const SIGNALS = [
+  { id: "trend_break", label: "趋势突破" },
+  { id: "oversold",    label: "超跌反弹" },
+  { id: "range",       label: "震荡市" },
+  { id: "high_vol",    label: "高波动" },
+  { id: "event",       label: "事件驱动" },
+  { id: "risk_off",    label: "回撤预警" },
+];
+
+const PRESETS = [
+  { id: "p1",  name: "BTC 趋势加仓",   signal: "trend_break", platform: "binance", category: "数字货币", strategy: "trend",    risk: "mid",  horizon: "swing",    capital: 20000 },
+  { id: "p2",  name: "ETH 超跌抄底",   signal: "oversold",    platform: "okx",     category: "数字货币", strategy: "meanrev",  risk: "low",  horizon: "intraday", capital: 10000 },
+  { id: "p3",  name: "BTC 震荡网格",   signal: "range",       platform: "binance", category: "数字货币", strategy: "grid",     risk: "low",  horizon: "intraday", capital: 15000 },
+  { id: "p4",  name: "高波动趋势跟进", signal: "high_vol",    platform: "bybit",   category: "数字货币", strategy: "trend",    risk: "high", horizon: "intraday", capital: 12000 },
+  { id: "p5",  name: "财报事件博弈",   signal: "event",       platform: "ashare",  category: "股票",   strategy: "event",    risk: "high", horizon: "intraday", capital: 8000  },
+  { id: "p6",  name: "A股多因子调仓",  signal: "range",       platform: "ashare",  category: "股票",   strategy: "multifactor", risk: "mid", horizon: "long", capital: 50000 },
+  { id: "p7",  name: "期货统计套利",   signal: "range",       platform: "cme",     category: "期货",   strategy: "statarb",  risk: "mid",  horizon: "swing",    capital: 30000 },
+  { id: "p8",  name: "高频做市跑量",   signal: "high_vol",    platform: "kucoin",  category: "数字货币", strategy: "hft",     risk: "mid",  horizon: "intraday", capital: 25000 },
+  { id: "p9",  name: "回撤防御降杠杆", signal: "risk_off",    platform: "ibkr",    category: "股票",   strategy: "meanrev",  risk: "low",  horizon: "intraday", capital: 15000 },
+  { id: "p10", name: "外汇趋势套利",   signal: "trend_break", platform: "fxcm",    category: "外汇",   strategy: "trend",    risk: "mid",  horizon: "swing",    capital: 18000 },
+];
+
+const platformName = (id) => (PLATFORMS.find((p) => p.id === id) || {}).name || id;
+const strategyName = (id) => (STRATEGIES.find((s) => s.id === id) || {}).name || id;
+const riskName      = (id) => (RISKS.find((r) => r.id === id) || {}).name || id;
+const horizonName   = (id) => (HORIZONS.find((h) => h.id === id) || {}).name || id;
+const signalLabel   = (id) => (SIGNALS.find((s) => s.id === id) || {}).label || id;
+
 /* =========================================================
  * 工具函数
  * ========================================================= */
@@ -147,12 +177,11 @@ function evaluate(rate, strategy) {
 let accounts = [];
 let equitySeries = [];
 const logs = [];
-let activeMode = "classic";   // classic | guided
-let currentStep = 0;          // 分步引导：0/1/2
+let activeMode = "classic";   // classic | preset
+let activeSignals = [];
 
-// 两套表单元素的作用域（经典 / 分步）
+// 经典操作台表单元素作用域
 const classicScope = { platform: "#platform", category: "#category", strategy: "#strategy", risk: "#risk", horizon: "#horizon", capital: "#capital", unit: "#capitalUnit" };
-const guidedScope = { platform: "#gPlatform", category: "#gCategory", strategy: "#gStrategy", risk: "#gRisk", horizon: "#gHorizon", capital: "#gCapital", unit: "#gCapitalUnit" };
 
 /* =========================================================
  * 渲染：下拉框
@@ -182,24 +211,21 @@ function updateUnitFor(scope) {
 }
 
 function populateSelects() {
-  [classicScope, guidedScope].forEach((scope) => {
-    fillSelect($(scope.platform), PLATFORMS, (p) => `${p.name} · ${p.region}`, (p) => p.id);
-    fillSelect($(scope.strategy), STRATEGIES, (s) => `${s.name}（${s.note}）`, (s) => s.id);
-    fillSelect($(scope.risk), RISKS, (r) => `${r.name}（${r.leverage}x）`, (r) => r.id);
-    fillSelect($(scope.horizon), HORIZONS, (h) => h.name, (h) => h.id);
-    syncCategoriesFor(scope);
-  });
+  fillSelect($(classicScope.platform), PLATFORMS, (p) => `${p.name} · ${p.region}`, (p) => p.id);
+  fillSelect($(classicScope.strategy), STRATEGIES, (s) => `${s.name}（${s.note}）`, (s) => s.id);
+  fillSelect($(classicScope.risk), RISKS, (r) => `${r.name}（${r.leverage}x）`, (r) => r.id);
+  fillSelect($(classicScope.horizon), HORIZONS, (h) => h.name, (h) => h.id);
+  syncCategoriesFor(classicScope);
 }
 
 function readInputs() {
-  const scope = activeMode === "guided" ? guidedScope : classicScope;
   return {
-    platform: PLATFORMS.find((p) => p.id === $(scope.platform).value),
-    category: $(scope.category).value,
-    strategy: STRATEGIES.find((s) => s.id === $(scope.strategy).value),
-    risk: RISKS.find((r) => r.id === $(scope.risk).value),
-    horizon: HORIZONS.find((h) => h.id === $(scope.horizon).value),
-    capital: Math.max(0, Number($(scope.capital).value) || 0),
+    platform: PLATFORMS.find((p) => p.id === $(classicScope.platform).value),
+    category: $(classicScope.category).value,
+    strategy: STRATEGIES.find((s) => s.id === $(classicScope.strategy).value),
+    risk: RISKS.find((r) => r.id === $(classicScope.risk).value),
+    horizon: HORIZONS.find((h) => h.id === $(classicScope.horizon).value),
+    capital: Math.max(0, Number($(classicScope.capital).value) || 0),
   };
 }
 
@@ -240,7 +266,6 @@ function renderAccounts() {
   });
   $("#accountCount").textContent = `${accounts.length} 个账户`;
 
-  // 总览卡片
   renderOverview();
 }
 
@@ -307,7 +332,6 @@ function drawChart(series) {
     .map((v, i) => `${i === 0 ? "M" : "L"}${x(i).toFixed(1)},${y(v).toFixed(1)}`)
     .join(" ") + ` L${x(series.length - 1).toFixed(1)},${h - pad} L${x(0).toFixed(1)},${h - pad} Z`;
 
-  // 基准线（净资产 = 1.0）
   const baseY = y(1.0);
 
   svg.innerHTML = `
@@ -327,16 +351,7 @@ function drawChart(series) {
  * 结果展示（醒目评价）
  * ========================================================= */
 
-function renderResult(res, evalRes, capital) {
-  const box = $("#resultBox");
-  box.classList.remove("hidden");
-  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
-
-  $("#evalBanner").className = "eval-banner eval-" + evalRes.band;
-  $("#evalBanner").innerHTML = `
-    <span class="tag">${evalRes.tag}</span>
-    <span class="comment">${evalRes.comment}</span>`;
-
+function metricRows(res) {
   const rr = res.returnRate;
   const metrics = [
     ["收益率", sign(rr), rr >= 0 ? "up" : "down"],
@@ -347,65 +362,73 @@ function renderResult(res, evalRes, capital) {
     ["成交笔数", res.trades + " 笔", "flat"],
     ["杠杆", res.leverage + "x", "flat"],
   ];
-
-  $("#metrics").innerHTML = metrics
-    .map((m) => `<div class="metric"><div class="k">${m[0]}</div><div class="v ${m[2]}">${m[1]}</div></div>`)
-    .join("");
+  return metrics.map((m) => `<div class="metric"><div class="k">${m[0]}</div><div class="v ${m[2]}">${m[1]}</div></div>`).join("");
 }
 
-/* =========================================================
- * 交易记录
- * ========================================================= */
-
-function addLog(op, res, evalRes) {
-  const now = new Date();
-  const time = now.toLocaleTimeString("zh-CN", { hour12: false });
-  logs.unshift({ time, op, res, evalRes });
-  renderLogs();
+function renderResult(res, evalRes) {
+  const box = $("#resultBox");
+  box.classList.remove("hidden");
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+  box.innerHTML = `
+    <div class="eval-banner eval-${evalRes.band}">
+      <span class="tag">${evalRes.tag}</span>
+      <span class="comment">${evalRes.comment}</span>
+    </div>
+    <div class="metrics">${metricRows(res)}</div>`;
 }
 
-function renderLogs() {
-  const body = $("#logBody");
-  body.innerHTML = "";
-  logs.forEach((l) => {
-    const tr = document.createElement("tr");
-    const rr = l.res.returnRate;
-    tr.innerHTML = `
-      <td>${l.time}</td>
-      <td>${l.op.platform.name}</td>
-      <td>${l.op.category}</td>
-      <td>${l.op.strategy.name}</td>
-      <td>${l.op.risk.name}</td>
-      <td>${fmt(l.op.capital, 0)}</td>
-      <td class="${rr >= 0 ? "up" : "down"}">${sign(rr)}</td>
-      <td class="${l.res.profit >= 0 ? "up" : "down"}">${l.res.profit >= 0 ? "+" : ""}${fmt(l.res.profit, 0)}</td>
-      <td><span class="eval-chip chip-${l.evalRes.band}">${l.evalRes.tag}</span></td>`;
-    body.appendChild(tr);
-  });
-  $("#logEmpty").classList.toggle("hidden", logs.length > 0);
+function renderBatchResult(results) {
+  const box = $("#resultBox");
+  box.classList.remove("hidden");
+  box.scrollIntoView({ behavior: "smooth", block: "nearest" });
+
+  const totalPnl = results.reduce((s, r) => s + r.res.profit, 0);
+  const wins = results.filter((r) => r.res.profit > 0).length;
+  const losses = results.filter((r) => r.res.profit < 0).length;
+  const band = totalPnl >= 0 ? "win" : "loss";
+  const tag = totalPnl >= 0 ? "组合盈利" : "组合亏损";
+  const comment = `批量执行 ${results.length} 笔，合计盈亏 ${totalPnl >= 0 ? "+" : ""}${fmt(totalPnl, 0)}（${wins} 盈 / ${losses} 亏）。`;
+
+  const rows = results.map((r) => `
+    <div class="batch-row">
+      <div class="batch-name">${r.op.name}</div>
+      <div class="batch-meta">${r.op.platform.name} · ${r.op.category} · ${r.op.strategy.name} · ${r.op.risk.name}</div>
+      <span class="eval-chip chip-${r.evalRes.band}">${r.evalRes.tag}</span>
+      <div class="batch-pnl ${r.res.profit >= 0 ? "up" : "down"}">${r.res.profit >= 0 ? "+" : ""}${fmt(r.res.profit, 0)}（${sign(r.res.returnRate)}）</div>
+    </div>`).join("");
+
+  box.innerHTML = `
+    <div class="eval-banner eval-${band}">
+      <span class="tag">${tag}</span>
+      <span class="comment">${comment}</span>
+    </div>
+    <div class="batch-list">${rows}</div>`;
 }
 
 /* =========================================================
  * 执行一次模拟
  * ========================================================= */
 
-function runOperation() {
-  const op = readInputs();
+function executeOp(op) {
   const res = simulate(op.platform, op.category, op.strategy, op.risk, op.horizon, op.capital);
   const evalRes = evaluate(res.rate, op.strategy);
-
-  renderResult(res, evalRes, op.capital);
   addLog(op, res, evalRes);
 
-  // 净值曲线向前推进一次
   if (equitySeries.length) {
     equitySeries.push(clamp(equitySeries[equitySeries.length - 1] * (1 + res.returnRate), 0.5, 2.0));
     drawChart(equitySeries);
   }
+  return { op, res, evalRes };
+}
+
+function runOperation() {
+  const op = readInputs();
+  const r = executeOp(op);
+  renderResult(r.res, r.evalRes);
 }
 
 /* =========================================================
- * 模式切换 / 分步引导
+ * 模式切换 / 预设操作台
  * ========================================================= */
 
 function setMode(mode) {
@@ -413,34 +436,67 @@ function setMode(mode) {
   document.querySelectorAll(".mode-tab").forEach((b) =>
     b.classList.toggle("active", b.dataset.mode === mode));
   $("#classicMode").classList.toggle("hidden", mode !== "classic");
-  $("#guidedMode").classList.toggle("hidden", mode !== "guided");
-  if (mode === "guided") renderSteps();
+  $("#presetMode").classList.toggle("hidden", mode !== "preset");
 }
 
-function renderSteps() {
-  document.querySelectorAll(".step").forEach((el) =>
-    el.classList.toggle("active", Number(el.dataset.step) === currentStep));
-  document.querySelectorAll(".step-panel").forEach((el) =>
-    el.classList.toggle("active", Number(el.dataset.panel) === currentStep));
-
-  const atLast = currentStep === 2;
-  $("#prevBtn").disabled = currentStep === 0;
-  $("#nextBtn").textContent = atLast ? "执行模拟" : "下一步";
-  $("#stepHint").textContent = `第 ${currentStep + 1} / 3 步`;
+function renderMarketSignals() {
+  const shuffled = [...SIGNALS].sort(() => Math.random() - 0.5);
+  activeSignals = shuffled.slice(0, 2 + Math.floor(Math.random() * 2)).map((s) => s.id);
+  const chips = SIGNALS.map((s) =>
+    `<span class="signal-chip ${activeSignals.includes(s.id) ? "active" : ""}">${s.label}</span>`).join("");
+  $("#marketSignals").innerHTML = `<span class="market-label">今日行情：</span>${chips}`;
+  renderPresets();
 }
 
-function goNext() {
-  if (currentStep === 2) {
-    runOperation();
-    return;
-  }
-  currentStep = Math.min(2, currentStep + 1);
-  renderSteps();
+function renderPresets() {
+  const list = $("#presetList");
+  list.innerHTML = "";
+  PRESETS.forEach((p) => {
+    const recommended = activeSignals.includes(p.signal);
+    const meta = `${platformName(p.platform)} · ${p.category} · ${strategyName(p.strategy)} · ${riskName(p.risk)} · ${horizonName(p.horizon)} · ${fmt(p.capital, 0)}`;
+    const card = document.createElement("div");
+    card.className = "preset-card" + (recommended ? " recommended" : "");
+    card.innerHTML = `
+      <label class="preset-check"><input type="checkbox" class="preset-select" value="${p.id}"></label>
+      <div class="preset-main">
+        <div class="preset-name">${p.name} ${recommended ? '<span class="badge recommend">推荐</span>' : ""}</div>
+        <div class="preset-meta">${meta}</div>
+        <div class="preset-trigger">触发：${signalLabel(p.signal)}</div>
+      </div>
+      <button type="button" class="btn small exec-one" data-id="${p.id}">执行</button>`;
+    list.appendChild(card);
+  });
+  updateSelCount();
 }
 
-function goPrev() {
-  currentStep = Math.max(0, currentStep - 1);
-  renderSteps();
+function resolvePreset(p) {
+  return {
+    name: p.name,
+    platform: PLATFORMS.find((x) => x.id === p.platform),
+    category: p.category,
+    strategy: STRATEGIES.find((x) => x.id === p.strategy),
+    risk: RISKS.find((x) => x.id === p.risk),
+    horizon: HORIZONS.find((x) => x.id === p.horizon),
+    capital: p.capital,
+  };
+}
+
+function execPreset(id) {
+  const p = PRESETS.find((x) => x.id === id);
+  const r = executeOp(resolvePreset(p));
+  renderResult(r.res, r.evalRes);
+}
+
+function batchRun() {
+  const ids = [...document.querySelectorAll(".preset-select:checked")].map((i) => i.value);
+  if (!ids.length) return;
+  const results = ids.map((id) => executeOp(resolvePreset(PRESETS.find((p) => p.id === id))));
+  renderBatchResult(results);
+}
+
+function updateSelCount() {
+  const n = document.querySelectorAll(".preset-select:checked").length;
+  $("#selHint").textContent = `已选 ${n} 项`;
 }
 
 /* =========================================================
@@ -458,7 +514,7 @@ function init() {
   equitySeries = generateEquity();
   drawChart(equitySeries);
   renderLogs();
-  renderSteps();
+  renderMarketSignals();
 
   $("#opForm").addEventListener("submit", handleSubmit);
 
@@ -467,10 +523,16 @@ function init() {
 
   $("#platform").addEventListener("change", () => syncCategoriesFor(classicScope));
   $("#category").addEventListener("change", () => updateUnitFor(classicScope));
-  $("#gPlatform").addEventListener("change", () => syncCategoriesFor(guidedScope));
-  $("#gCategory").addEventListener("change", () => updateUnitFor(guidedScope));
-  $("#prevBtn").addEventListener("click", goPrev);
-  $("#nextBtn").addEventListener("click", goNext);
+
+  $("#refreshMarket").addEventListener("click", renderMarketSignals);
+  $("#presetList").addEventListener("click", (e) => {
+    const btn = e.target.closest(".exec-one");
+    if (btn) execPreset(btn.dataset.id);
+  });
+  $("#presetList").addEventListener("change", (e) => {
+    if (e.target.classList.contains("preset-select")) updateSelCount();
+  });
+  $("#batchRun").addEventListener("click", batchRun);
 
   $("#refreshBtn").addEventListener("click", () => {
     renderAccounts();

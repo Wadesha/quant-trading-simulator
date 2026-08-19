@@ -58,7 +58,7 @@
         <h2>策略操作台</h2>
         <div class="mode-switch" role="tablist">
           <button type="button" class="mode-tab active" data-mode="classic">经典操作台</button>
-          <button type="button" class="mode-tab" data-mode="guided">分步引导</button>
+          <button type="button" class="mode-tab" data-mode="preset">预设操作台</button>
         </div>
       </div>
 
@@ -95,50 +95,21 @@
         </form>
       </div>
 
-      <!-- 分步引导操作台：三步上手 -->
-      <div id="guidedMode" class="hidden">
-        <div class="steps">
-          <div class="step active" data-step="0"><span class="step-num">1</span><span class="step-label">平台与品类</span></div>
-          <div class="step" data-step="1"><span class="step-num">2</span><span class="step-label">策略与风控</span></div>
-          <div class="step" data-step="2"><span class="step-num">3</span><span class="step-label">资金与执行</span></div>
+      <!-- 预设操作台：预案库，勾选后单笔/批量执行 -->
+      <div id="presetMode" class="hidden">
+        <div class="market-bar">
+          <div class="market-signals" id="marketSignals"></div>
+          <button type="button" class="btn ghost small" id="refreshMarket">换一批行情</button>
         </div>
-
-        <form id="guidedForm" class="guided-form" autocomplete="off">
-          <div class="step-panel active" data-panel="0">
-            <h3 class="step-title">第 1 步：选择交易平台与交易品类</h3>
-            <div class="op-form">
-              <div class="field"><label for="gPlatform">交易平台</label><select id="gPlatform"></select></div>
-              <div class="field"><label for="gCategory">交易品类</label><select id="gCategory"></select></div>
-            </div>
-          </div>
-          <div class="step-panel" data-panel="1">
-            <h3 class="step-title">第 2 步：选择策略方式与风控参数</h3>
-            <div class="op-form">
-              <div class="field"><label for="gStrategy">策略方式</label><select id="gStrategy"></select></div>
-              <div class="field"><label for="gRisk">风险 / 杠杆</label><select id="gRisk"></select></div>
-              <div class="field"><label for="gHorizon">持仓周期</label><select id="gHorizon"></select></div>
-            </div>
-          </div>
-          <div class="step-panel" data-panel="2">
-            <h3 class="step-title">第 3 步：投入资金并执行模拟</h3>
-            <div class="op-form">
-              <div class="field"><label for="gCapital">投入资金 <span id="gCapitalUnit">(USDT)</span></label><input id="gCapital" type="number" min="0" step="100" value="10000" /></div>
-            </div>
-          </div>
-
-          <div class="wizard-nav">
-            <button type="button" class="btn ghost" id="prevBtn">上一步</button>
-            <span class="step-hint" id="stepHint">第 1 / 3 步</span>
-            <button type="button" class="btn primary" id="nextBtn">下一步</button>
-          </div>
-        </form>
+        <div class="preset-list" id="presetList"></div>
+        <div class="preset-actions">
+          <span class="step-hint" id="selHint">已选 0 项</span>
+          <button type="button" class="btn primary" id="batchRun">批量执行选中</button>
+        </div>
       </div>
 
       <!-- 结果区 -->
-      <div id="resultBox" class="result hidden">
-        <div id="evalBanner" class="eval-banner"></div>
-        <div class="metrics" id="metrics"></div>
-      </div>
+      <div id="resultBox" class="result hidden"></div>
     </section>
 
     <!-- 交易记录 -->
